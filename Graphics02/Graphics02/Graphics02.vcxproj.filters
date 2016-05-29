@@ -28,10 +28,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="N:\학교\4학년 1학기\컴퓨터그래픽스\Term_Project_-_복사본\Term Project - 복사본\Term Project\VertexShader.vert">
+    <None Include="FragmentShader.frag">
       <Filter>리소스 파일</Filter>
     </None>
-    <None Include="N:\학교\4학년 1학기\컴퓨터그래픽스\Term_Project_-_복사본\Term Project - 복사본\Term Project\FragmentShader.frag">
+    <None Include="VertexShader.vert">
       <Filter>리소스 파일</Filter>
     </None>
   </ItemGroup>
