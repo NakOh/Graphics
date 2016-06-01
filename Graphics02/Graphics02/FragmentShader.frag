@@ -6,9 +6,10 @@ uniform vec4 lightPosition;
 varying vec4 fragColor;
 varying vec4 fragNormal;
 varying vec4 fragPosition;
+varying mat4 rotationMatrix;
 
 void main() {
-	vec4 L = lightPosition - fragPosition;
+	vec4 L = rotationMatrix * lightPosition - fragPosition;
 	vec4 V = cameraPosition - fragPosition;
 	vec4 N = fragNormal;
 
@@ -22,7 +23,7 @@ void main() {
 
 	float shiness = 90.0;
 
-	specular = pow(specular, shiness);
+	specular = max(0.0,pow(specular, shiness));
 
 	float ac = 0.1;
 	float dc = 0.8;
@@ -30,6 +31,6 @@ void main() {
 
 	vec4 Color = vec4(0.1,0.1,0.9,1.0);
 
-	gl_FragColor = fragColor * (ac * ambient + dc * diffusion + sc* specular);
+	gl_FragColor = fragColor * (ac * ambient + dc * diffusion + sc * specular);
 	//gl_FragColor = fragColor;
 }

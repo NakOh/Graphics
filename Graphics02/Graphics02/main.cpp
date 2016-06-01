@@ -8,6 +8,58 @@
 using namespace std;
 
 
+class vec4 {
+public:
+	float x, y, z, w;
+	vec4() {
+		x = y = z = 0;
+		w = 1;
+	}
+	vec4(float x, float y, float z) {
+		this->x = x;
+		this->y = y;
+		this->z = z;
+		w = 1;
+	}
+	void normalize() {
+		if (x * x + y * y + z * z < 0) {
+			printf("fdsafdsafdsahkflhafhewq hfeiqacfeioa cfweo");
+		}
+		float dist = sqrt(x * x + y * y + z * z);
+		x /= dist;
+		y /= dist;
+		z /= dist;
+	}
+	void Mul(vec4& b) {
+		x *= b.x;
+		y *= b.y;
+		z *= b.z;
+		w = 1;
+	}
+
+	void Add(vec4& b) {
+		x += b.x;
+		y += b.y;
+		z += b.z;
+		w = 1;
+	}
+	void Sub(vec4& b) {
+		x -= b.x;
+		y -= b.y;
+		z -= b.z;
+		w = 1;
+	}
+
+	static vec4* Cross(vec4& a, vec4& b) {
+		vec4* ret = new vec4();
+		ret->x = (float)(a.y * b.z - a.z * b.y);
+		ret->y = (float)(a.z * b.x - a.x * b.z);
+		ret->z = (float)(a.x * b.y - a.y * b.x);
+		ret->w = 1;
+		return ret;
+	}
+};
+
 
 int ProgramID; // Shader Program ID;
 int modelMatrixID; // Shader ModelMatrix ID;
@@ -15,18 +67,17 @@ int viewMatrixID; // Shader ViewMatrix ID;
 int projectionMatrixID; // Shader ProjectionMatrix ID;
 int vertexPositionID; // Shader vertexPosition ID;
 int vertexColorID; // Shader vectexColor ID;
+int vertexNormalID; // Shader vertexNoraml ID;
 
-
+int cameraID;
+int lightID;
 
 GLfloat eyex = 0, eyey = 0, eyez = 0;
 GLfloat targetx = 0, targety = 0, targetz = 0;
 
 GLfloat modelMatrix[16] = { 1,0,0,0 ,0,1,0,0 , 0,0,1,0 , 0,0,0,1 };
-
 GLfloat modelMatrix2[16] = { 30,0,0,0 ,0,30,0,0 , 0,0,30,0 , -30,0,0,1 };
-
 GLfloat modelMatrix3[16] = { 30,0,0,0 ,0,30,0,0 , 0,0,30,0 , 0,-30,0,1 };
-
 GLfloat viewMatrix[16] = { 1,0,0,0 , 0,1,0,0 , 0,0,1,0 , 0,0,0,1 };
 GLfloat projMatrix[16] = { 0.01f,0,0,0 , 0,0.01f,0,0 , 0,0,-0.01f,0 , 0,0,0,1 };
 
@@ -40,13 +91,16 @@ GLfloat *vertices;
 GLfloat *newVertices;
 GLfloat *colordata;
 
+vec4 *faceNormalVec;
+GLfloat *vertexNormalVec;
+
 GLfloat centerX;
 GLfloat centerY;
 GLfloat centerZ;
 
 GLint *indices;
 GLfloat ratio;
-GLfloat  aspectRatio;
+GLfloat aspectRatio;
 
 int info;
 int vertex;
@@ -57,20 +111,21 @@ void SetupRC(void);
 int readData();
 void RenderScene();
 void Idle();
-void update();
 void parsingData(string line, int count, int *vertexCount, int *indiceCount);
 void checkError();
 void MyKeyboardFunc(unsigned char Key, int x, int y);
 void MatrixMultiply();
 void orthogonal();
 void perspective();
+void calNormalVector();
+void calVertexNormalVector();
 void multiply(GLfloat* mat1, GLfloat* mat2);
 
 void main(int argc, char* argv[])
 {
 
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
 	
 	glutCreateWindow("HomeWork");
 
@@ -85,10 +140,44 @@ void main(int argc, char* argv[])
 	glutMainLoop();		// run GLUT framework
 }
 
+
+void SetupRC(void)
+{
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	int glewtest = glewInit();
+	if (glewtest != GLEW_OK) {
+		printf("오류");
+	}
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glFrontFace(GL_CCW);
+
+	ProgramID = shader::LoadShaders("VertexShader.vert", "FragmentShader.frag");
+
+	modelMatrixID = glGetUniformLocation(ProgramID, "modelMatrix");
+	viewMatrixID = glGetUniformLocation(ProgramID, "viewMatrix");
+	projectionMatrixID = glGetUniformLocation(ProgramID, "projectionMatrix");
+
+	//Fragment
+	cameraID = glGetUniformLocation(ProgramID, "cameraPosition");
+	lightID = glGetUniformLocation(ProgramID, "lightPosition");
+	
+	vertexPositionID = glGetAttribLocation(ProgramID, "vertexPosition");
+	vertexColorID = glGetAttribLocation(ProgramID, "vertexColor");
+	vertexNormalID = glGetAttribLocation(ProgramID, "vertexNormal");
+
+
+
+}
+
 void MatrixMultiply() {
+
 	for (int i = 0; i < 16; i++) {
 		viewMatrix[i] = 0;
 	}
+
 	viewMatrix[0] = 1; viewMatrix[5] = 1; viewMatrix[10] = 1; viewMatrix[15] = 1;
 	GLfloat rotationMatrix[16] = { cos(ratio),0,-sin(ratio),0 , 0,1,0, 0 , sin(ratio),0,cos(ratio),0 , 0,0,0,1  };
 	GLfloat translate[16] = {
@@ -96,12 +185,93 @@ void MatrixMultiply() {
 		0,1,0,0,
 		0,0,1,0,
 		-eyex,-eyey,-eyez,1 };
-
 	
 	multiply(rotationMatrix, viewMatrix);
 	multiply(translate, viewMatrix);
 
 	glUniformMatrix4fv(viewMatrixID, 1, GL_FALSE, &viewMatrix[0]);
+}
+
+void calVertexNormalVector() {
+
+	vertexNormalVec = new GLfloat[info * 3 * 4]; //법선 벡터는 Vertex  * 4 만큼 (호모지니어스)
+	vec4* result = new vec4[vertex];
+	for (int i = 0; i < vertex; i++) {
+		result[i] = vec4();
+		for (int j = 0; j < info * 3; j++)		
+			if (i == indices[j])	
+				result[i].Add(faceNormalVec[j / 3]);
+		result[i].normalize();
+	}
+
+	for (int i = 0; i < info * 3; i++) {
+		int face = indices[i];
+		vertexNormalVec[i * 4] = result[face].x;
+		vertexNormalVec[i * 4 + 1] = result[face].y;
+		vertexNormalVec[i * 4 + 2] = result[face].z;
+		vertexNormalVec[i * 4 + 3] = result[face].w;
+
+		cout << "   x : "  << vertexNormalVec[i * 4];
+		cout << ",  y : " << vertexNormalVec[i * 4 + 1 ];
+		cout << ",  z : " << vertexNormalVec[i * 4 + 2];
+		cout << ",  w : " << vertexNormalVec[i * 4 + 3 ] << endl;
+	}
+	delete result;
+	delete[] faceNormalVec;
+}
+
+void calNormalVector() {
+
+	faceNormalVec = new vec4[info]; //법선 벡터는 Vertex 수만큼
+
+	vec4 temp1 = vec4();
+	vec4 temp2 = vec4();
+	vec4 temp3 = vec4();
+	vec4 *result;
+	
+	int index = 0;
+
+
+	for (int j = 0; j < info; j++) {
+		//indice를 3번씩 잘라서, 그 3개의 정보를 가지고 Normal Vector를 구한다. 
+		index = indices[j * 3]; // FACE 정보를 가져와서 해당 vertex의 좌표 정보를 가져와 입력하자.	
+		temp1.x = vertices[3 * index + 0];
+		temp1.y = vertices[3 * index + 1];
+		temp1.z = vertices[3 * index + 2];
+		temp1.w = 1;
+
+		index = indices[j * 3 + 1]; // FACE 정보를 가져와서 해당 vertex의 좌표 정보를 가져와 입력하자.	
+		temp2.x = vertices[3 * index + 0];
+		temp2.y = vertices[3 * index + 1];
+		temp2.z = vertices[3 * index + 2];
+		temp2.w = 1;
+
+		index = indices[j * 3 + 2]; // FACE 정보를 가져와서 해당 vertex의 좌표 정보를 가져와 입력하자.	
+		temp3.x = vertices[3 * index + 0];
+		temp3.y = vertices[3 * index + 1];
+		temp3.z = vertices[3 * index + 2];
+		temp3.w = 1;
+
+		//이 정보를 가지고 Normal Vector를 구하자.		
+		temp2.Sub(temp1);
+		temp3.Sub(temp1);
+
+		result = vec4::Cross(temp2, temp3);
+		result->normalize();
+
+		faceNormalVec[j].x = result->x;
+		faceNormalVec[j].y = result->y;
+		faceNormalVec[j].z = result->z;
+		faceNormalVec[j].w = result->w;
+
+		/*
+		cout << "x : " << faceNormalVec[j].x << ",  y : ";
+		cout << faceNormalVec[j].y << ",  z : ";
+		cout << faceNormalVec[j].z << "  ";
+		cout << faceNormalVec[j].w << endl;
+		//*/
+	}
+	delete result;
 }
 
 void multiply(GLfloat* mat1, GLfloat* mat2) {
@@ -225,7 +395,7 @@ int readData() {
 	int vertexCount = 0;
 	int indiceCount = 0;
 
-	ifstream myfile("models/teapot.dat");
+	ifstream myfile("models/cube.dat");
 
 	if (myfile.is_open())
 	{
@@ -254,37 +424,23 @@ int readData() {
 		int j = 0;
 		int indexs = 0;
 
-		for (j = 0; j < info * 3; j++){
+		for (j = 0; j < info * 3; j++) {
 			indexs = indices[j]; // FACE 정보를 가져와서 해당 vertex의 좌표 정보를 가져와 입력하자.	
-			if (indexs == 0) {
-				newVertices[i] = vertices[0];
-				colordata[i] = 1.0f;			
-				i= i+1;
-				newVertices[i] = vertices[1];
-				colordata[i] = 1.0f;
-				i = i + 1;
-				newVertices[i] = vertices[2];
-				colordata[i] = 1.0f;
-				i = i + 1;				
-				newVertices[i] = 1;
-				colordata[i] = 1.0f;
-				i = i + 1;
-			}else{
-				newVertices[i] = vertices[3 * (indexs-1)];
-				colordata[i] = 1.0f;
-				i = i + 1;
-				newVertices[i] = vertices[(3 * (indexs - 1)) + 1];
-				colordata[i] = 1.0f;
-				i = i + 1;
-				newVertices[i] = vertices[(3 * (indexs - 1)) + 2];
-				colordata[i] = 1.0f;
-				i = i + 1;
-				newVertices[i] = 1;
-				colordata[i] = 1.0f;
-				i = i + 1;
-			}
+			newVertices[i] = vertices[3 * (indexs)];
+			colordata[i] = 1.0f;
+			i = i + 1;
+			newVertices[i] = vertices[(3 * (indexs)) + 1];
+			colordata[i] = 1.0f;
+			i = i + 1;
+			newVertices[i] = vertices[(3 * (indexs)) + 2];
+			colordata[i] = 1.0f;
+			i = i + 1;
+			newVertices[i] = 1;
+			colordata[i] = 1.0f;
+			i = i + 1;
 		}
-
+		calNormalVector(); //face Normal 벡터 구하기
+		calVertexNormalVector(); // vertex Noraml 벡터 구하기
 		myfile.close();
 	}
 
@@ -355,23 +511,6 @@ void Idle() {
 	glutPostRedisplay();
 }
 
-void SetupRC(void)
-{
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);	
-	int glewtest = glewInit();
-	if (glewtest != GLEW_OK) {
-		printf("오류");
-	}
-
-	ProgramID = shader::LoadShaders("VertexShader.vert", "FragmentShader.frag");
-
-	modelMatrixID = glGetUniformLocation(ProgramID, "modelMatrix");
-	viewMatrixID = glGetUniformLocation(ProgramID, "viewMatrix");
-	projectionMatrixID = glGetUniformLocation(ProgramID, "projectionMatrix");
-
-	vertexPositionID = glGetAttribLocation(ProgramID, "vertexPosition");
-	vertexColorID = glGetAttribLocation(ProgramID, "vertexColor");
-}
 
 void RenderScene() {
 
@@ -398,16 +537,19 @@ void RenderScene() {
 	modelMatrix3[10] = 1;
 	modelMatrix3[15] = 1;
 
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glUseProgram(ProgramID);
-
-	
 	
 	glUniformMatrix4fv(projectionMatrixID, 1, GL_FALSE, &projMatrix[0]);
+	glUniformMatrix4fv(viewMatrixID, 1, GL_FALSE, &viewMatrix[0]);
+
+	glUniform4f(cameraID, eyex, eyey, eyez, 1); //카메라 위치
+	glUniform4f(lightID, 1, -5, -5, 1);
 
 	glEnableVertexAttribArray(vertexPositionID);
 	glEnableVertexAttribArray(vertexColorID);
+	glEnableVertexAttribArray(vertexNormalID);
 	
 
 	GLfloat scaleN = 30.0f;
@@ -428,14 +570,18 @@ void RenderScene() {
 		0,0,1,0,
 		-pos[0],-pos[1],-pos[2],1 };
 	GLfloat rotationMatrix[16] = { cos(rotation),sin(rotation),0 ,0 ,-sin(rotation),cos(rotation),0, 0 , 0,0,1,0 , 0,0,0,1 };
+	GLfloat rotationMatrix2[16] = { 1, 0, 0, 0, 0, cos(rotation),sin(rotation),0 ,0 ,-sin(rotation),cos(rotation),1 };
 	rotation = rotation + 0.001f;
 
 	multiply(scale, modelMatrix);
 	multiply(translate, modelMatrix);
 	multiply(rotationMatrix, modelMatrix);
+	//multiply(rotationMatrix2, modelMatrix);
 	multiply(translate2, modelMatrix);
 
+
 	glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, &modelMatrix[0]);
+
 	glVertexAttribPointer(
 		vertexPositionID,				// The attribute we want to configure
 		4,							    // size
@@ -453,6 +599,16 @@ void RenderScene() {
 		0,								// stride
 		(void*)&colordata[0]			// array buffer offset
 		);
+
+	glVertexAttribPointer(
+		vertexNormalID,				// The attribute we want to configure
+		4,							    // size
+		GL_FLOAT,						// type
+		GL_FALSE,						// normalized?
+		0,								// stride
+		(void*)&vertexNormalVec[0]			// array buffer offset
+		);
+
 
 
 	glDrawArrays(GL_TRIANGLES, 0, info * 3);
@@ -465,7 +621,8 @@ void RenderScene() {
 	multiply(translate, modelMatrix2);
 	multiply(rotationMatrix, modelMatrix2);
 
-	glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, &modelMatrix2[0]);
+	glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, &modelMatrix2[0]);	
+
 	glVertexAttribPointer(
 		vertexPositionID,				// The attribute we want to configure
 		4,							    // size
@@ -482,6 +639,14 @@ void RenderScene() {
 		GL_FALSE,						// normalized?
 		0,								// stride
 		(void*)&colordata[0]			// array buffer offset
+		);
+	glVertexAttribPointer(
+		vertexNormalID,				// The attribute we want to configure
+		4,							    // size
+		GL_FLOAT,						// type
+		GL_FALSE,						// normalized?
+		0,								// stride
+		(void*)&vertexNormalVec[0]			// array buffer offset
 		);
 
 	glDrawArrays(GL_TRIANGLES, 0, info * 3);
@@ -531,24 +696,26 @@ void RenderScene() {
 		0,								// stride
 		(void*)&colordata[0]			// array buffer offset
 		);
+	glVertexAttribPointer(
+		vertexNormalID,				// The attribute we want to configure
+		4,							    // size
+		GL_FLOAT,						// type
+		GL_FALSE,						// normalized?
+		0,								// stride
+		(void*)&vertexNormalVec[0]			// array buffer offset
+		);
 
 	glDrawArrays(GL_TRIANGLES, 0, info * 3);
-	
-
-
 
 	glDisableVertexAttribArray(vertexPositionID);
 	glDisableVertexAttribArray(vertexColorID);
+	glDisableVertexAttribArray(vertexNormalID);
 
 	MatrixMultiply();
 
 	glUseProgram(0);
 	glutSwapBuffers();
 
-
-}
-
-void update() {
 
 }
 
