@@ -22,9 +22,6 @@ public:
 		w = 1;
 	}
 	void normalize() {
-		if (x * x + y * y + z * z < 0) {
-			printf("fdsafdsafdsahkflhafhewq hfeiqacfeioa cfweo");
-		}
 		float dist = sqrt(x * x + y * y + z * z);
 		x /= dist;
 		y /= dist;
@@ -119,6 +116,8 @@ void orthogonal();
 void perspective();
 void calNormalVector();
 void calVertexNormalVector();
+void phong();
+void gouraud();
 void multiply(GLfloat* mat1, GLfloat* mat2);
 
 void main(int argc, char* argv[])
@@ -167,9 +166,6 @@ void SetupRC(void)
 	vertexPositionID = glGetAttribLocation(ProgramID, "vertexPosition");
 	vertexColorID = glGetAttribLocation(ProgramID, "vertexColor");
 	vertexNormalID = glGetAttribLocation(ProgramID, "vertexNormal");
-
-
-
 }
 
 void MatrixMultiply() {
@@ -210,11 +206,6 @@ void calVertexNormalVector() {
 		vertexNormalVec[i * 4 + 1] = result[face].y;
 		vertexNormalVec[i * 4 + 2] = result[face].z;
 		vertexNormalVec[i * 4 + 3] = result[face].w;
-
-		cout << "   x : "  << vertexNormalVec[i * 4];
-		cout << ",  y : " << vertexNormalVec[i * 4 + 1 ];
-		cout << ",  z : " << vertexNormalVec[i * 4 + 2];
-		cout << ",  w : " << vertexNormalVec[i * 4 + 3 ] << endl;
 	}
 	delete result;
 	delete[] faceNormalVec;
@@ -325,8 +316,22 @@ void MyKeyboardFunc(unsigned char Key, int x, int y) {
 	case 'o': // Orthographic Projection
 		orthogonal();
 		break;
+	case 'h':
+		phong();
+		break;
+	case 'g':
+		gouraud();
+		break;
 	}
 	glutPostRedisplay();
+}
+
+void phong() {
+
+}
+
+void gouraud() {
+
 }
 
 void perspective() {
@@ -395,7 +400,7 @@ int readData() {
 	int vertexCount = 0;
 	int indiceCount = 0;
 
-	ifstream myfile("models/cube.dat");
+	ifstream myfile("models/teapot.dat");
 
 	if (myfile.is_open())
 	{
@@ -544,8 +549,8 @@ void RenderScene() {
 	glUniformMatrix4fv(projectionMatrixID, 1, GL_FALSE, &projMatrix[0]);
 	glUniformMatrix4fv(viewMatrixID, 1, GL_FALSE, &viewMatrix[0]);
 
-	glUniform4f(cameraID, eyex, eyey, eyez, 1); //카메라 위치
-	glUniform4f(lightID, 1, -5, -5, 1);
+	glUniform4f(cameraID, 1 - eyex, 1 - eyey, 1 - eyez, 1); //카메라 위치
+	glUniform4f(lightID, -10, 2, -5, 1);
 
 	glEnableVertexAttribArray(vertexPositionID);
 	glEnableVertexAttribArray(vertexColorID);
@@ -709,7 +714,7 @@ void RenderScene() {
 
 	glDisableVertexAttribArray(vertexPositionID);
 	glDisableVertexAttribArray(vertexColorID);
-	glDisableVertexAttribArray(vertexNormalID);
+	//glDisableVertexAttribArray(vertexNormalID);
 
 	MatrixMultiply();
 

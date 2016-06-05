@@ -19,6 +19,6 @@ void main () {
     fragColor    = Color;
 	rotationMatrix = projectionMatrix * viewMatrix * modelMatrix;
 	fragNormal   = vertexNormal;
-	fragPosition = rotationMatrix * vertexPosition;
-    gl_Position  = fragPosition;
+	fragPosition = viewMatrix * modelMatrix * vertexPosition;
+    gl_Position  = projectionMatrix * fragPosition;
 }
